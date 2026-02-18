@@ -18,6 +18,37 @@
         else false
       }}
 
+- name: Extract CPU cores from spec or templateParameters
+  ansible.builtin.set_fact:
+    vm_cpu_cores: >-
+      {{
+        compute_instance.spec.cores | default(params.cpu_cores) | int
+      }}
+
+- name: Extract memory from spec or templateParameters
+  ansible.builtin.set_fact:
+    vm_memory: >-
+      {{
+        (compute_instance.spec.memoryGiB | string + 'Gi') if compute_instance.spec.memoryGiB is defined
+        else params.memory
+      }}
+
+- name: Extract disk size from spec or templateParameters
+  ansible.builtin.set_fact:
+    vm_disk_size: >-
+      {{
+        (compute_instance.spec.bootDisk.sizeGiB | string + 'Gi') if compute_instance.spec.bootDisk.sizeGiB is defined
+        else params.disk_size
+      }}
+
+- name: Extract image source from spec or templateParameters
+  ansible.builtin.set_fact:
+    vm_image_source: >-
+      {{
+        compute_instance.spec.image.sourceRef if compute_instance.spec.image.sourceRef is defined
+        else params.image_source
+      }}
+
 - name: Validate exposed_ports format
   ansible.builtin.assert:
     that:
@@ -36,9 +67,9 @@
     vm_template_spec:
       domain:
         cpu:
-          cores: "{{ params.cpu_cores | int }}"
+          cores: "{{ vm_cpu_cores }}"
         memory:
-          guest: "{{ params.memory }}"
+          guest: "{{ vm_memory }}"
         devices:
           disks:
             - name: root-disk
@@ -153,13 +184,13 @@
       spec:
         source:
           registry:
-            url: "docker://{{ params.image_source }}"
+            url: "docker://{{ vm_image_source }}"
         pvc:
           accessModes:
             - ReadWriteOnce
           resources:
             requests:
-              storage: "{{ params.disk_size }}"
+              storage: "{{ vm_disk_size }}"
           storageClassName: "{{ storage_class }}"
     state: present
 
@@ -222,8 +253,8 @@
     msg:
       - "Virtual Machine '{{ compute_instance_name }}' created successfully"
       - "Namespace: {{ compute_instance_working_namespace }}"
-      - "Image: {{ params.image_source }}"
-      - "CPU Cores: {{ params.cpu_cores }}/Memory: {{ params.memory }}"
-      - "Root Disk Size: {{ params.disk_size }}"
+      - "Image: {{ vm_image_source }}"
+      - "CPU Cores: {{ vm_cpu_cores }}/Memory: {{ vm_memory }}"
+      - "Root Disk Size: {{ vm_disk_size }}"
       - "RunStrategy: {{ compute_instance.spec.runStrategy | default('Always') }} (running: {{ vm_running_state }})"
       - "Status: {{ vm_status.resources[0].status.printableStatus | default('Unknown') }}"
