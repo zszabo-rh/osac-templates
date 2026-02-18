@@ -10,6 +10,14 @@
   ansible.builtin.set_fact:
     params: "{{ default_arg_specs | combine(template_parameters) }}"
 
+- name: Determine VM running state from ComputeInstance spec runStrategy
+  ansible.builtin.set_fact:
+    vm_running_state: >-
+      {{
+        true if (compute_instance.spec.runStrategy | default('Always')) == 'Always'
+        else false
+      }}
+
 - name: Validate exposed_ports format
   ansible.builtin.assert:
     that:
@@ -166,7 +174,7 @@
         namespace: "{{ compute_instance_working_namespace }}"
         labels: "{{ default_vm_labels }}"
       spec:
-        running: true
+        running: "{{ vm_running_state }}"
         template:
           metadata:
             labels: "{{ default_vm_labels }}"
@@ -217,4 +225,5 @@
       - "Image: {{ params.image_source }}"
       - "CPU Cores: {{ params.cpu_cores }}/Memory: {{ params.memory }}"
       - "Root Disk Size: {{ params.disk_size }}"
+      - "RunStrategy: {{ compute_instance.spec.runStrategy | default('Always') }} (running: {{ vm_running_state }})"
       - "Status: {{ vm_status.resources[0].status.printableStatus | default('Unknown') }}"
