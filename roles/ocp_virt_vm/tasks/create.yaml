@@ -304,8 +304,21 @@
     name: "{{ compute_instance_name }}"
     namespace: "{{ compute_instance_working_namespace }}"
     state: absent
-    wait: true
-    wait_timeout: 300
+  when: restart_requested | bool
+
+- name: Wait for VMI to be recreated after restart
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ remote_cluster_kubeconfig | default(omit) }}"
+    api_version: kubevirt.io/v1
+    kind: VirtualMachineInstance
+    name: "{{ compute_instance_name }}"
+    namespace: "{{ compute_instance_working_namespace }}"
+  register: vmi_info
+  until:
+    - vmi_info.resources | length > 0
+    - vmi_info.resources[0].metadata.creationTimestamp > compute_instance.spec.restartRequestedAt
+  retries: 60
+  delay: 5
   when: restart_requested | bool
 
 - name: Show VM Namespace and VM Name
